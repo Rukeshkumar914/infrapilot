@@ -27,3 +27,4 @@ backups/*
 # Build files
 build/
 dist/
+logs/*.json
