@@ -1,7 +1,11 @@
+ 
 from src.infrapilot.system_info import get_system_info
+from infrapilot.logger import setup_logger
 
 
 def check_system_health():
+    logger = setup_logger()
+
     system = get_system_info()
 
     checks = {
@@ -12,11 +16,15 @@ def check_system_health():
 
     results = {}
 
+    # Check individual system components
     for name, usage in checks.items():
+
         if usage >= 90:
             status = "CRITICAL"
+
         elif usage >= 75:
             status = "WARNING"
+
         else:
             status = "HEALTHY"
 
@@ -25,14 +33,37 @@ def check_system_health():
             "status": status,
         }
 
+        # Log individual component status
+        logger.info(
+            "%s usage: %.2f%% | Status: %s",
+            name,
+            usage,
+            status
+        )
+
+    # Calculate overall system health
     overall_status = "HEALTHY"
 
-    if any(item["status"] == "CRITICAL" for item in results.values()):
+    if any(
+        item["status"] == "CRITICAL"
+        for item in results.values()
+    ):
         overall_status = "CRITICAL"
-    elif any(item["status"] == "WARNING" for item in results.values()):
+
+    elif any(
+        item["status"] == "WARNING"
+        for item in results.values()
+    ):
         overall_status = "WARNING"
+
+    # Log overall health status
+    logger.info(
+        "Overall system health: %s",
+        overall_status
+    )
 
     return {
         "overall_status": overall_status,
         "checks": results,
     }
+
