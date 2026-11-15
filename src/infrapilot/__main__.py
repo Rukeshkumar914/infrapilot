@@ -4,6 +4,7 @@ from pathlib import Path
 
 from infrapilot.system_info import get_system_info
 from infrapilot.health import check_system_health
+from infrapilot.monitor import start_monitoring
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -68,6 +69,19 @@ def main():
         help="Generate and save JSON system report"
     )
 
+    group.add_argument(
+    "--monitor",
+    action="store_true",
+    help="Start continuous system monitoring"
+    )
+
+    parser.add_argument(
+    "--interval",
+    type=int,
+    default=60,
+    help="Monitoring interval in seconds (default: 60)"
+    )
+
     args = parser.parse_args()
 
     if args.info:
@@ -78,6 +92,9 @@ def main():
 
     elif args.report:
         generate_report()
+
+    elif args.monitor:
+        start_monitoring(interval=args.interval)   
 
     else:
         display_system_info()

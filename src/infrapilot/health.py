@@ -1,5 +1,5 @@
- 
-from src.infrapilot.system_info import get_system_info
+
+from infrapilot.system_info import get_system_info 
 from infrapilot.logger import setup_logger
 
 
