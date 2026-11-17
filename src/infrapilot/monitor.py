@@ -5,6 +5,10 @@ from infrapilot.logger import setup_logger
 
 
 def start_monitoring(interval=60):
+    if interval <= 0:
+        raise ValueError(
+            "Monitoring interval must be greater than 0 seconds."
+        )
     logger = setup_logger()
 
     logger.info("InfraPilot continuous monitoring started")
