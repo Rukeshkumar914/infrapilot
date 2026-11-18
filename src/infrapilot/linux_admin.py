@@ -17,13 +17,13 @@ def get_top_processes(limit=10):
         except (
             psutil.NoSuchProcess,
             psutil.AccessDenied,
-            psutil.ZombieProcess
+            psutil.ZombieProcess,
         ):
             continue
 
     processes.sort(
         key=lambda process: process["memory_percent"] or 0,
-        reverse=True
+        reverse=True,
     )
 
     return processes[:limit]
@@ -46,18 +46,22 @@ def get_process_details(pid):
                 "executable": process.exe(),
                 "created_at": datetime.fromtimestamp(
                     process.create_time()
-                ).isoformat()
+                ).isoformat(),
             }
 
         return details
 
+    except psutil.ZombieProcess:
+        raise ValueError(
+            f"Process with PID {pid} is a zombie process."
+        )
+
     except psutil.NoSuchProcess:
-        raise ValueError(f"Process with PID {pid} does not exist.")
+        raise ValueError(
+            f"Process with PID {pid} does not exist."
+        )
 
     except psutil.AccessDenied:
         raise PermissionError(
             f"Permission denied while accessing PID {pid}."
         )
-
-    except psutil.ZombieProcess:
-        raise ValueError(f"Process with PID {pid} is a zombie process.")
