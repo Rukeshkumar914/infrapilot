@@ -1,5 +1,6 @@
 
 import argparse
+import re
 import json
 from pathlib import Path
 
@@ -22,6 +23,10 @@ from infrapilot.automation import (
     list_directory,
     move_path,
     get_path_info,
+)
+from infrapilot.bash_automation import (
+    validate_bash_script,
+    run_bash_script,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -150,6 +155,37 @@ def display_path_info(path):
         print(f"Error: {error}")
 
 
+def display_validate_bash(script, timeout):
+    print("\n========== BASH SCRIPT VALIDATION ==========\n")
+
+    try:
+        result = validate_bash_script(
+            script,
+            timeout=timeout,
+        )
+        print(json.dumps(result, indent=4))
+
+    except (OSError, ValueError, TimeoutError) as error:
+        print(f"Error: {error}")
+
+
+def display_run_bash(script, script_args, timeout, environment):
+    print("\n========== BASH SCRIPT EXECUTION ==========\n")
+    print("Warning: Only execute trusted scripts.\n")
+
+    try:
+        result = run_bash_script(
+            script,
+            args=script_args,
+            timeout=timeout,
+            env=environment,
+        )
+        print(json.dumps(result, indent=4))
+
+    except (OSError, ValueError, TimeoutError) as error:
+        print(f"Error: {error}")
+
+
 def generate_report():
     print("\n========== GENERATING SYSTEM REPORT ==========\n")
 
@@ -239,6 +275,18 @@ def main():
         help="Display file or directory information",
     )
 
+    group.add_argument(
+        "--validate-bash",
+        metavar="SCRIPT",
+        help="Validate Bash script syntax without execution",
+    )
+
+    group.add_argument(
+        "--run-bash",
+        metavar="SCRIPT",
+        help="Execute a trusted Bash script",
+    )
+
     parser.add_argument(
         "--content",
         default="",
@@ -265,6 +313,28 @@ def main():
         help="Monitoring interval in seconds",
     )
 
+    parser.add_argument(
+        "--bash-timeout",
+        type=int,
+        default=30,
+        help="Bash script timeout in seconds (default: 30)",
+    )
+
+    parser.add_argument(
+        "--bash-arg",
+        action="append",
+        default=[],
+        help="Argument to pass to Bash script; repeat for multiple arguments",
+    )
+
+    parser.add_argument(
+        "--bash-env",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Environment variable for Bash script; repeat for multiple variables",
+    )
+
     args = parser.parse_args()
 
     if args.count <= 0:
@@ -273,8 +343,36 @@ def main():
     if args.interval <= 0:
         parser.error("--interval must be greater than 0")
 
+    if args.bash_timeout <= 0:
+        parser.error("--bash-timeout must be greater than 0")
+
     if args.overwrite and not (args.create_file or args.move):
         parser.error("--overwrite requires --create-file or --move")
+
+    if (args.bash_arg or args.bash_env) and not args.run_bash:
+        parser.error("--bash-arg and --bash-env require --run-bash")
+
+    if args.bash_timeout != 30 and not (
+        args.run_bash or args.validate_bash
+    ):
+        parser.error(
+            "--bash-timeout requires --run-bash or --validate-bash"
+        )
+
+    environment = {}
+
+    for item in args.bash_env:
+        if "=" not in item:
+            parser.error(
+                f"Invalid --bash-env format: {item}. Use KEY=VALUE."
+            )
+
+        key, value = item.split("=", 1)
+
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            parser.error(f"Invalid environment variable name: {key}")
+
+        environment[key] = value
 
     if args.info:
         display_system_info()
@@ -325,6 +423,20 @@ def main():
 
     elif args.path_info:
         display_path_info(args.path_info)
+
+    elif args.validate_bash:
+        display_validate_bash(
+            args.validate_bash,
+            args.bash_timeout,
+        )
+
+    elif args.run_bash:
+        display_run_bash(
+            args.run_bash,
+            args.bash_arg,
+            args.bash_timeout,
+            environment,
+        )
 
     else:
         display_system_info()
