@@ -10,6 +10,12 @@ from infrapilot.linux_admin import (
     get_top_processes,
     get_process_details,
 )
+from infrapilot.network import (
+    get_local_ip,
+    get_network_interfaces,
+    get_dns_records,
+    ping_host,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -48,12 +54,43 @@ def display_process_details(pid):
         print(f"Error: {error}")
 
 
+def display_network():
+    print("\n========== NETWORK INFORMATION ==========\n")
+
+    network_info = {
+        "local_ip": get_local_ip(),
+        "interfaces": get_network_interfaces(),
+    }
+
+    print(json.dumps(network_info, indent=4))
+
+
+def display_dns(hostname):
+    print("\n========== DNS LOOKUP ==========\n")
+
+    try:
+        result = {
+            "hostname": hostname,
+            "ipv4_addresses": get_dns_records(hostname),
+        }
+        print(json.dumps(result, indent=4))
+    except ValueError as error:
+        print(f"Error: {error}")
+
+
+def display_ping(host, count):
+    print("\n========== NETWORK CONNECTIVITY ==========\n")
+
+    result = ping_host(host, count=count)
+    print(json.dumps(result, indent=4))
+
+
 def generate_report():
     print("\n========== GENERATING SYSTEM REPORT ==========\n")
 
     report = {
         "system_information": get_system_info(),
-        "system_health": check_system_health()
+        "system_health": check_system_health(),
     }
 
     log_dir = PROJECT_ROOT / "logs"
@@ -70,7 +107,7 @@ def generate_report():
 def main():
     parser = argparse.ArgumentParser(
         prog="infrapilot",
-        description="InfraPilot - Linux Infrastructure Toolkit"
+        description="InfraPilot - Linux Infrastructure Toolkit",
     )
 
     group = parser.add_mutually_exclusive_group()
@@ -85,30 +122,72 @@ def main():
         "--process",
         type=int,
         metavar="PID",
-        help="Display details of a specific process"
+        help="Display details of a specific process",
+    )
+
+    group.add_argument(
+        "--network",
+        action="store_true",
+        help="Display local IP and network interfaces",
+    )
+
+    group.add_argument(
+        "--dns",
+        metavar="HOSTNAME",
+        help="Resolve hostname using DNS",
+    )
+
+    group.add_argument(
+        "--ping",
+        metavar="HOST",
+        help="Check network connectivity to a host",
+    )
+
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=4,
+        help="Number of ping packets (default: 4)",
     )
 
     parser.add_argument(
         "--interval",
         type=int,
         default=60,
-        help="Monitoring interval in seconds"
+        help="Monitoring interval in seconds",
     )
 
     args = parser.parse_args()
 
     if args.info:
         display_system_info()
+
     elif args.health:
         display_system_health()
+
     elif args.report:
         generate_report()
+
     elif args.monitor:
         start_monitoring(interval=args.interval)
+
     elif args.processes:
         display_processes()
+
     elif args.process is not None:
         display_process_details(args.process)
+
+    elif args.network:
+        display_network()
+
+    elif args.dns:
+        display_dns(args.dns)
+
+    elif args.ping:
+        if args.count <= 0:
+            parser.error("--count must be greater than 0")
+        display_ping(args.ping, args.count)
+
     else:
         display_system_info()
         display_system_health()
