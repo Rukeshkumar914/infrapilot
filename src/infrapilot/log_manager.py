@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 
 def read_logs(log_file, limit=None):
     """Read log entries from a log file."""
-
     path = Path(log_file).expanduser()
 
     if not path.exists():
@@ -15,8 +14,12 @@ def read_logs(log_file, limit=None):
     if not path.is_file():
         raise ValueError(f"Not a file: {path}")
 
-    if limit is not None and limit <= 0:
-        raise ValueError("Limit must be greater than 0.")
+    if limit is not None and (
+        not isinstance(limit, int)
+        or isinstance(limit, bool)
+        or limit <= 0
+    ):
+        raise ValueError("Limit must be a positive integer.")
 
     with path.open("r", encoding="utf-8") as file:
         lines = file.readlines()
@@ -29,7 +32,6 @@ def read_logs(log_file, limit=None):
 
 def analyze_logs(log_file):
     """Count log entries by severity."""
-
     lines = read_logs(log_file)
 
     counts = Counter({
@@ -58,7 +60,6 @@ def analyze_logs(log_file):
 
 def filter_logs(log_file, level):
     """Return log entries matching a severity level."""
-
     valid_levels = {"INFO", "WARNING", "ERROR", "CRITICAL"}
     level = level.upper()
 
@@ -66,12 +67,16 @@ def filter_logs(log_file, level):
         raise ValueError(f"Invalid log level: {level}")
 
     lines = read_logs(log_file)
+    filtered = []
 
-    return [
-        line for line in lines
-        if len(line.split("|")) >= 3
-        and line.split("|")[1].strip().upper() == level
-    ]
+    for line in lines:
+        parts = line.split("|")
+
+        if len(parts) >= 3:
+            if parts[1].strip().upper() == level:
+                filtered.append(line)
+
+    return filtered
 
 
 def cleanup_old_logs(
@@ -80,8 +85,7 @@ def cleanup_old_logs(
     dry_run=True,
     active_log="infrapilot.log",
 ):
-    """Identify or delete old rotated log files safely."""
-
+    """Safely identify or delete expired rotated log files."""
     directory = Path(log_dir).expanduser()
 
     if not directory.exists():
@@ -94,27 +98,39 @@ def cleanup_old_logs(
             f"Not a directory: {directory}"
         )
 
-    if retention_days < 0:
-        raise ValueError("Retention days cannot be negative.")
+    if (
+        not isinstance(retention_days, int)
+        or isinstance(retention_days, bool)
+        or retention_days < 0
+    ):
+        raise ValueError(
+            "Retention days must be a non-negative integer."
+        )
 
     if not isinstance(dry_run, bool):
         raise ValueError("dry_run must be True or False.")
+
+    active_name = Path(active_log).name
+    rotated_prefix = f"{active_name}."
 
     cutoff = datetime.now(timezone.utc) - timedelta(
         days=retention_days
     )
 
-    active_path = Path(active_log).name
-    deleted = []
+    selected = []
     skipped = []
 
     for file_path in directory.iterdir():
-
         if not file_path.is_file():
             continue
 
-        if file_path.name == active_path:
+        # Never delete the active log.
+        if file_path.name == active_name:
             skipped.append(str(file_path))
+            continue
+
+        # Only process rotated files of the active log.
+        if not file_path.name.startswith(rotated_prefix):
             continue
 
         modified_time = datetime.fromtimestamp(
@@ -123,17 +139,16 @@ def cleanup_old_logs(
         )
 
         if modified_time < cutoff:
-            if dry_run:
-                deleted.append(str(file_path))
-            else:
+            selected.append(str(file_path))
+
+            if not dry_run:
                 file_path.unlink()
-                deleted.append(str(file_path))
 
     return {
         "directory": str(directory.resolve()),
         "retention_days": retention_days,
         "dry_run": dry_run,
-        "deleted_or_selected": deleted,
+        "deleted_or_selected": selected,
         "skipped": skipped,
-        "total": len(deleted),
+        "total": len(selected),
     }
