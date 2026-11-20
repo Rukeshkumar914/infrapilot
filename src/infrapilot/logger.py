@@ -1,12 +1,17 @@
+
 import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOG_DIR = PROJECT_ROOT / "logs"
-LOG_DIR.mkdir(exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_FILE = LOG_DIR / "infrapilot.log"
+
+MAX_LOG_SIZE = 5 * 1024 * 1024
+BACKUP_COUNT = 5
 
 
 def setup_logger():
@@ -20,9 +25,11 @@ def setup_logger():
         "%(asctime)s | %(levelname)s | %(message)s"
     )
 
-    file_handler = logging.FileHandler(
+    file_handler = RotatingFileHandler(
         LOG_FILE,
-        encoding="utf-8"
+        maxBytes=MAX_LOG_SIZE,
+        backupCount=BACKUP_COUNT,
+        encoding="utf-8",
     )
 
     console_handler = logging.StreamHandler()
