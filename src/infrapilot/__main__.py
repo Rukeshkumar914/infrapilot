@@ -7,16 +7,19 @@ from pathlib import Path
 from infrapilot.system_info import get_system_info
 from infrapilot.health import check_system_health
 from infrapilot.monitor import start_monitoring
+
 from infrapilot.linux_admin import (
     get_top_processes,
     get_process_details,
 )
+
 from infrapilot.network import (
     get_local_ip,
     get_network_interfaces,
     get_dns_records,
     ping_host,
 )
+
 from infrapilot.automation import (
     create_directory,
     create_file,
@@ -24,10 +27,19 @@ from infrapilot.automation import (
     move_path,
     get_path_info,
 )
+
 from infrapilot.bash_automation import (
     validate_bash_script,
     run_bash_script,
 )
+
+from infrapilot.postgres_backup import (
+    backup_database,
+    list_backups,
+    validate_backup,
+    restore_database,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -186,6 +198,84 @@ def display_run_bash(script, script_args, timeout, environment):
         print(f"Error: {error}")
 
 
+# PostgreSQL operations
+
+
+def display_postgres_backup(
+    dbname,
+    backup_dir,
+    host,
+    port,
+    username,
+    timeout,
+):
+    print("\n========== POSTGRESQL DATABASE BACKUP ==========\n")
+
+    try:
+        result = backup_database(
+            dbname=dbname,
+            backup_dir=backup_dir,
+            host=host,
+            port=port,
+            username=username,
+            timeout=timeout,
+        )
+        print(json.dumps(result, indent=4))
+
+    except (OSError, ValueError, RuntimeError, TimeoutError) as error:
+        print(f"Error: {error}")
+
+
+def display_postgres_backups(backup_dir):
+    print("\n========== POSTGRESQL BACKUP LIST ==========\n")
+
+    try:
+        result = list_backups(backup_dir)
+        print(json.dumps(result, indent=4))
+
+    except (OSError, ValueError) as error:
+        print(f"Error: {error}")
+
+
+def display_validate_postgres_backup(backup_file, timeout):
+    print("\n========== POSTGRESQL BACKUP VALIDATION ==========\n")
+
+    try:
+        result = validate_backup(
+            backup_file,
+            timeout=timeout,
+        )
+        print(json.dumps(result, indent=4))
+
+    except (OSError, ValueError, TimeoutError) as error:
+        print(f"Error: {error}")
+
+
+def display_postgres_restore(
+    backup_file,
+    target_db,
+    host,
+    port,
+    username,
+    timeout,
+):
+    print("\n========== POSTGRESQL DATABASE RESTORE ==========\n")
+
+    try:
+        result = restore_database(
+            backup_file=backup_file,
+            target_db=target_db,
+            host=host,
+            port=port,
+            username=username,
+            timeout=timeout,
+        )
+        print(json.dumps(result, indent=4))
+
+    except (OSError, ValueError, RuntimeError, TimeoutError) as error:
+        print(f"Error: {error}")
+
+
 def generate_report():
     print("\n========== GENERATING SYSTEM REPORT ==========\n")
 
@@ -213,6 +303,8 @@ def main():
 
     group = parser.add_mutually_exclusive_group()
 
+    # System operations
+
     group.add_argument("--info", action="store_true")
     group.add_argument("--health", action="store_true")
     group.add_argument("--report", action="store_true")
@@ -225,6 +317,8 @@ def main():
         metavar="PID",
         help="Display details of a specific process",
     )
+
+    # Network operations
 
     group.add_argument(
         "--network",
@@ -243,6 +337,8 @@ def main():
         metavar="HOST",
         help="Check network connectivity to a host",
     )
+
+    # File automation operations
 
     group.add_argument(
         "--create-dir",
@@ -275,6 +371,8 @@ def main():
         help="Display file or directory information",
     )
 
+    # Bash operations
+
     group.add_argument(
         "--validate-bash",
         metavar="SCRIPT",
@@ -286,6 +384,35 @@ def main():
         metavar="SCRIPT",
         help="Execute a trusted Bash script",
     )
+
+    # PostgreSQL operations
+
+    group.add_argument(
+        "--pg-backup",
+        metavar="DBNAME",
+        help="Create a PostgreSQL database backup",
+    )
+
+    group.add_argument(
+        "--pg-list-backups",
+        action="store_true",
+        help="List available PostgreSQL backups",
+    )
+
+    group.add_argument(
+        "--pg-validate-backup",
+        metavar="BACKUP_FILE",
+        help="Validate a PostgreSQL backup archive",
+    )
+
+    group.add_argument(
+        "--pg-restore",
+        nargs=2,
+        metavar=("BACKUP_FILE", "TARGET_DB"),
+        help="Restore backup into an existing database",
+    )
+
+    # General options
 
     parser.add_argument(
         "--content",
@@ -335,7 +462,43 @@ def main():
         help="Environment variable for Bash script; repeat for multiple variables",
     )
 
+    # PostgreSQL configuration
+
+    parser.add_argument(
+        "--pg-backup-dir",
+        default="backups",
+        help="PostgreSQL backup directory (default: backups)",
+    )
+
+    parser.add_argument(
+        "--pg-host",
+        default="localhost",
+        help="PostgreSQL server host (default: localhost)",
+    )
+
+    parser.add_argument(
+        "--pg-port",
+        type=int,
+        default=5432,
+        help="PostgreSQL server port (default: 5432)",
+    )
+
+    parser.add_argument(
+        "--pg-user",
+        default=None,
+        help="PostgreSQL username",
+    )
+
+    parser.add_argument(
+        "--pg-timeout",
+        type=int,
+        default=120,
+        help="PostgreSQL operation timeout in seconds",
+    )
+
     args = parser.parse_args()
+
+    # Input validation
 
     if args.count <= 0:
         parser.error("--count must be greater than 0")
@@ -359,6 +522,16 @@ def main():
             "--bash-timeout requires --run-bash or --validate-bash"
         )
 
+    # PostgreSQL validation
+
+    if not 1 <= args.pg_port <= 65535:
+        parser.error("--pg-port must be between 1 and 65535")
+
+    if args.pg_timeout <= 0:
+        parser.error("--pg-timeout must be greater than 0")
+
+    # Bash environment variables
+
     environment = {}
 
     for item in args.bash_env:
@@ -373,6 +546,8 @@ def main():
             parser.error(f"Invalid environment variable name: {key}")
 
         environment[key] = value
+
+    # Command execution
 
     if args.info:
         display_system_info()
@@ -436,6 +611,37 @@ def main():
             args.bash_arg,
             args.bash_timeout,
             environment,
+        )
+
+    # PostgreSQL command execution
+
+    elif args.pg_backup:
+        display_postgres_backup(
+            args.pg_backup,
+            args.pg_backup_dir,
+            args.pg_host,
+            args.pg_port,
+            args.pg_user,
+            args.pg_timeout,
+        )
+
+    elif args.pg_list_backups:
+        display_postgres_backups(args.pg_backup_dir)
+
+    elif args.pg_validate_backup:
+        display_validate_postgres_backup(
+            args.pg_validate_backup,
+            args.pg_timeout,
+        )
+
+    elif args.pg_restore:
+        display_postgres_restore(
+            args.pg_restore[0],
+            args.pg_restore[1],
+            args.pg_host,
+            args.pg_port,
+            args.pg_user,
+            args.pg_timeout,
         )
 
     else:
