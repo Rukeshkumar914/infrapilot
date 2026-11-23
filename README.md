@@ -357,4 +357,4 @@ Repository: https://github.com/Rukeshkumar914/infrapilot
 
 ## License
 
-No open-source license has been added yet. Add an appropriate `LICENSE` file before distributing the project under an open-source license.
+This project is licensed under the [MIT License](LICENSE).
